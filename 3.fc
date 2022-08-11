@@ -1,0 +1,66 @@
+{-
+
+  TASK 3 - Message validation.
+  Write the method that checks that cell contains valid message
+  in accordance to https://github.com/ton-blockchain/ton/blob/master/crypto/block/block.tlb#L155
+  Note, tests will only cover valid and invalid MessageAny objects,
+  valid MessageRelaxed (which are not simultaneously MessageAny) will not be presented
+  If message is invalid for any reason - method should return (0, null), otherwise
+  it should return (-1, [slice src, slice dest, int amount] ), where src, dest and
+  amount represents source of the message, destination of the message and attached
+  amount of TONs. If any of those values are not presented (or presented as
+  addr_none slice) in the message cell - they should be substituted with null.
+  It is guaranteed that for all tests any HashmapE datatype in message structure
+  is empty hashmaps (has hme_empty constructor).
+  Documentation on TL-B schemes can be found in https://ton.org/docs/#/overviews/TL-B
+  -}
+
+  () recv_internal() {
+  }
+
+  (int, int, int) parse_std_addrq(slice s) asm "REWRITESTDADDRQ";
+
+  ;; testable
+  (int, tuple) validate_message(cell message) method_id {
+    slice messageSlice = message.begin_parse();
+    var messageId = messageSlice~load_bits(1);
+    var ihrDisabled = messageSlice~load_bits(1);
+    var bounce = messageSlice~load_bits(1);
+    var bounced = messageSlice~load_bits(1);
+    int isFrom = messageSlice~load_uint(2);
+    slice from = null();
+    if (isFrom) {
+      from = messageSlice~load_bits(265);
+    }
+    int isTo = messageSlice~load_uint(2);
+    slice to = null();
+    if (isTo) {
+      to = messageSlice~load_bits(265);
+    }
+    int nValue = messageSlice~load_uint(4);
+    int amount = 0;
+    if (nValue) {
+      amount = messageSlice~load_uint(nValue * 8);
+    }
+    slice src = null();
+    if (isFrom) {
+      src = begin_cell().store_uint(isFrom, 2).store_slice(from).end_cell().begin_parse();
+      (_, _, int parsedSrc) = parse_std_addrq(src);
+      if (~ parsedSrc) {
+        return (0, null());
+      }
+    } 
+    slice dest = null();
+    if (isTo) {
+     dest = begin_cell().store_uint(isTo, 2).store_slice(to).end_cell().begin_parse();
+     (_, _, int parsedDest) = parse_std_addrq(dest);
+     if (~ parsedDest) {
+      return (0, null());
+    }
+  }
+  tuple res = empty_tuple();
+  res~tpush(isFrom ? src : null());
+  res~tpush(isTo ? dest : null());
+  res~tpush(nValue ? amount : null());
+  return (-1, res);
+}

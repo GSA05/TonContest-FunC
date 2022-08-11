@@ -1,0 +1,32 @@
+{-
+
+  TASK 2 - Merge hashmaps (dictionaries)
+  Write the method that merges two hashmaps into one. When keys of hashmaps
+  interesect - values from first hashmap should be used, while discarded
+  key/value pairs should be stored into separate hashmap.
+  Method should return two hashmaps (merged_dict, discared_dict). If any
+  of resulting hashmaps is empty it should be represented by `null` value.
+  Hashmap key length is 256 bit. Each hashmap has at most 256 elements.
+-}
+
+() recv_internal() {
+}
+
+
+;; testable
+(cell, cell) merge_hashmaps(cell dict1, cell dict2) method_id {
+	cell discared_dict = new_dict();
+	int key = 0;
+	cell valueCell = begin_cell().end_cell();
+	slice value = begin_parse(valueCell);
+	int res = 0;
+	int resAdd = 0;
+	while (~ dict_empty?(dict2)) {
+		(dict2, key, value, res) = udict_delete_get_min(dict2, 256);
+		(dict1, resAdd) = udict_add?(dict1, 256, key, value);
+		if (~ resAdd) {
+			(discared_dict, resAdd) = udict_add?(discared_dict, 256, key, value);
+		}
+	}
+	return (dict1, discared_dict);
+}

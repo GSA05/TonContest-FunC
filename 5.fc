@@ -1,0 +1,94 @@
+{-
+
+  TASK 5 - Address encoder
+  Write the method that for any valid MsgAddressInt with addr_std constructor
+  without anycast
+  (see https://github.com/ton-blockchain/ton/blob/master/crypto/block/block.tlb#L105)
+ returns the slice that contain ASCII encoded base64url user-friendly bouncable
+ address (without test-only flag), see https://ton.org/docs/#/howto/step-by-step?id=_1-smart-contract-addresses
+ -}
+
+ () recv_internal() {
+ }
+
+ slice crc16check(slice data) method_id {
+  int poly = 0x1021;
+  int req = 0;
+  builder message = begin_cell();
+  message = message.store_slice(data);
+  message = message.store_uint(0, 16);
+  slice messageSlice = message.end_cell().begin_parse();
+  int i = 0;
+  while(i < 36) {
+    int byte = 0;
+    if (i == 3) {
+      byte = messageSlice~load_int(8);
+      } else {
+        byte = messageSlice~load_uint(8);
+      }
+      int mask = 0x80;
+      while(mask > 0) {
+        req = req << 1;
+        if (byte & mask) {
+          req = req + 1;
+        }
+        mask >>= 1;
+        if (req > 0xffff) {
+          req = req & 0xffff;
+          req = req ^ poly;
+        }
+      }
+      i += 1;
+    }
+    return begin_cell().store_uint(req / 256, 8).store_uint(req % 256, 8).end_cell().begin_parse();
+  }
+
+  slice base64(slice data, int len) method_id {
+    tuple table = empty_tuple();
+    table~tpush("A"); table~tpush("B"); table~tpush("C"); table~tpush("D"); table~tpush("E"); table~tpush("F"); table~tpush("G"); table~tpush("H");
+    table~tpush("I"); table~tpush("J"); table~tpush("K"); table~tpush("L"); table~tpush("M"); table~tpush("N"); table~tpush("O"); table~tpush("P");
+    table~tpush("Q"); table~tpush("R"); table~tpush("S"); table~tpush("T"); table~tpush("U"); table~tpush("V"); table~tpush("W"); table~tpush("X");
+    table~tpush("Y"); table~tpush("Z"); table~tpush("a"); table~tpush("b"); table~tpush("c"); table~tpush("d"); table~tpush("e"); table~tpush("f");
+    table~tpush("g"); table~tpush("h"); table~tpush("i"); table~tpush("j"); table~tpush("k"); table~tpush("l"); table~tpush("m"); table~tpush("n");
+    table~tpush("o"); table~tpush("p"); table~tpush("q"); table~tpush("r"); table~tpush("s"); table~tpush("t"); table~tpush("u"); table~tpush("v");
+    table~tpush("w"); table~tpush("x"); table~tpush("y"); table~tpush("z"); table~tpush("0"); table~tpush("1"); table~tpush("2"); table~tpush("3");
+    table~tpush("4"); table~tpush("5"); table~tpush("6"); table~tpush("7"); table~tpush("8"); table~tpush("9"); table~tpush("-"); table~tpush("_");
+    builder encoded_data = begin_cell();
+    int olen = 4 * ((len + 2) / 3);
+    int i = 0;
+    while (i < len) {
+      int octet_a = 0;
+      int octet_b = 0;
+      int octet_c = 0;
+      if (i < len) {
+        octet_a = data~load_uint(8);
+        i += 1;
+      }
+      if (i < len) {
+        octet_b = data~load_uint(8);
+        i += 1;
+      }
+      if (i < len) {
+        octet_c = data~load_uint(8);
+        i += 1;
+      }
+      int triple = (octet_a << 0x10) + (octet_b << 0x08) + octet_c;
+      encoded_data = encoded_data.store_slice(table.at((triple >> 3 * 6) & 0x3F));
+      encoded_data = encoded_data.store_slice(table.at((triple >> 2 * 6) & 0x3F));
+      encoded_data = encoded_data.store_slice(table.at((triple >> 1 * 6) & 0x3F));
+      encoded_data = encoded_data.store_slice(table.at((triple >> 0 * 6) & 0x3F));
+    }
+    return encoded_data.end_cell().begin_parse();
+  }
+
+  ;; testable
+  (slice) encode_address(slice Address) method_id {
+    (int workChain, int addr) = Address.parse_std_addr();
+    builder res = begin_cell();
+    res~store_uint(0x11, 8);
+    res~store_int(workChain, 8);
+    res~store_uint(addr, 256);
+    res = res.store_slice(crc16check(res.end_cell().begin_parse()));
+    slice resSlice = res.end_cell().begin_parse();
+    return base64(resSlice, 36);
+  }
